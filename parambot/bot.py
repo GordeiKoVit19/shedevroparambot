@@ -1,12 +1,13 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 from secret import BOT_TOKEN
-
+from solver.solve_fraction import solve_numerator, check_denominator
+from graphing.plot import plot_graph
 from sympy import sympify, simplify
 import re
 
 NUMERATOR, DENOMINATOR = 0, 1
-ALLOWED_CHARS = re.compile(r'^[0-9xXa\+\-\*\(\)\sAbs]*$')
+ALLOWED_CHARS = re.compile(r'^[0-9xXa\+\-\*/\(\)\s\^Abs]*$')
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -34,63 +35,76 @@ async def graph_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return NUMERATOR
 
 
-async def graph_numerator(update, context):
-    text = update.message.text.replace("|", "Abs")  # модуль в Abs
+# --- graph_numerator ---
+async def graph_numerator(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
     if not ALLOWED_CHARS.match(text):
         await update.message.reply_text(
-            "❌ Некорректное выражение. Можно использовать только x, a, числа, +, -, **, (), Abs.\n"
-            "Пример: Abs(3*x - 3) - 2*x - 2 - a**2"
+            "❌ Некорректное выражение. Разрешено использовать только x, a, числа, +, -, *, /, ^, (), Abs.\n"
+            "Пример: Abs(3*x - 3) - 2*x - 2 - a^2"
         )
         return NUMERATOR
+
     try:
-        expr = sympify(text)
+        # sympify с convert_xor=True чтобы ^ воспринималась как степень
+        expr = sympify(text, convert_xor=True)
         context.user_data['numerator'] = expr
+
         await update.message.reply_text(
             "✏️ Отлично! Теперь пришлите знаменатель уравнения.\n"
-            "Пример: x**2 - Abs(2*x) - a"
+            "Пример: x^2 - Abs(2*x) - a"
         )
         return DENOMINATOR
+
     except:
         await update.message.reply_text(
-            "❌ Некорректное выражение. Попробуйте ещё раз.\n"
-            "Пример: Abs(3*x - 7) - 2*x - 2 - a"
+            "❌ Некорректное выражение. Попробуйте ещё раз."
         )
         return NUMERATOR
 
 
-async def graph_denominator(update, context):
-    text = update.message.text.replace("|", "Abs")
+
+
+# --- graph_denominator ---
+async def graph_denominator(update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
 
     if not ALLOWED_CHARS.match(text):
         await update.message.reply_text(
-            "❌ Некорректное выражение. Можно использовать только x, a, числа, +, -, **, (), Abs.\n"
-            "Пример: Abs(x**2 - 7) - 2*x - a"
+            "❌ Некорректное выражение. Разрешено использовать только x, a, числа, +, -, *, /, ^, (), Abs.\n"
+            "Пример: x^2 - Abs(2*x) - a"
         )
         return DENOMINATOR
 
     try:
-        expr = sympify(text)
+        expr = sympify(text, convert_xor=True)
         simplified_expr = simplify(expr)
         if simplified_expr.is_Number and simplified_expr == 0:
             await update.message.reply_text(
-                "❌ Знаменатель не может быть равен нулю. Попробуйте другое выражение.\n"
-                "Пример: Abs(x**2 - 2) - 2*x - a"
+                "❌ Знаменатель не может быть равен нулю. Попробуйте другое выражение."
             )
             return DENOMINATOR
 
         context.user_data['denominator'] = expr
-        await update.message.reply_text(
-            f"✅ Получено!\nЧислитель: {context.user_data['numerator']}\n"
-            f"Знаменатель: {context.user_data['denominator']}\n"
-            "Теперь можно строить график a(x)."
+
+        filename = plot_graph(
+            context.user_data['numerator'],
+            context.user_data['denominator'],
+            limit=10,
+            y_limit=10
         )
-        return ConversationHandler.END
-    except:
+        await update.message.reply_photo(photo=open(filename, 'rb'))
+
+    except Exception as e:
+        print("Ошибка построения графика:", e)
         await update.message.reply_text(
-            "❌ Некорректное выражение. Попробуйте ещё раз.\n"
-            "Пример: Abs(x**2 - 3) - 2*x - a"
+            "❌ Некорректное выражение или ошибка при построении графика. Попробуйте ещё раз."
         )
         return DENOMINATOR
+
+
+
 
 
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
