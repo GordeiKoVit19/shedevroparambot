@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sympy import symbols, solve
+from sympy import symbols, solve, lambdify
 
 x, a = symbols('x a')
 
@@ -8,18 +8,20 @@ def plot_graph(numerator_expr=None, denominator_expr=None, limit=10, y_limit=10)
     x_vals = np.linspace(-limit, limit, 2000)
     plt.figure(figsize=(8, 8))
 
-    # --- Числитель ---
     if numerator_expr is not None:
         num_solutions = solve(numerator_expr, a)
         for expr in num_solutions:
-            y_vals = np.array([float(expr.subs(x, val)) if expr.subs(x, val).is_real else np.nan for val in x_vals])
+            func = lambdify(x, expr, modules=['numpy'])
+            y_vals = func(x_vals)
+            y_vals[np.iscomplex(y_vals)] = np.nan
             plt.plot(x_vals, y_vals, color='blue')
 
-    # --- Знаменатель ---
     if denominator_expr is not None:
         denom_solutions = solve(denominator_expr, a)
         for expr in denom_solutions:
-            y_vals = np.array([float(expr.subs(x, val)) if expr.subs(x, val).is_real else np.nan for val in x_vals])
+            func = lambdify(x, expr, modules=['numpy'])
+            y_vals = func(x_vals)
+            y_vals[np.iscomplex(y_vals)] = np.nan
             plt.plot(x_vals, y_vals, linestyle='--', color='orange')
 
     plt.axhline(0, color='black')
@@ -31,8 +33,9 @@ def plot_graph(numerator_expr=None, denominator_expr=None, limit=10, y_limit=10)
     plt.grid(True, linestyle=':', linewidth=0.5)
     plt.xlabel('x')
     plt.ylabel('a')
-    plt.title('График a(x) с единичными отметками')
+    plt.title('График a(x)')
     plt.tight_layout()
+
     filename = 'graph.png'
     plt.savefig(filename)
     plt.close()
